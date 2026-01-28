@@ -44,8 +44,22 @@ app.post("/tickets", async (req, res) => {
 });
 
 // 3. RESOLVE TICKET
+// 3. RESOLVE TICKET (Now Protected)
 app.patch("/tickets/:id/resolve", async (req, res) => {
   const id = req.params.id;
+
+  // 1. Get the password sent from the frontend
+  // (Headers are always lowercase in Express)
+  const providedPassword = req.headers["x-admin-password"];
+
+  // 2. Check against your real secret password
+  // (For now, we can hardcode it here. Later, move to .env)
+  const MY_SECRET = "DevTeam2026";
+
+  if (providedPassword !== MY_SECRET) {
+    return res.status(403).json({ error: "Wrong Password! Access Denied." });
+  }
+
   try {
     const result = await sql`
             UPDATE tickets 
