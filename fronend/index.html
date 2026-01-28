@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>School Helpdesk</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        padding: 20px;
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+      .container {
+        display: flex;
+        gap: 40px;
+      }
+      .box {
+        flex: 1;
+        padding: 20px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+      }
+      .ticket {
+        border-bottom: 1px solid #eee;
+        padding: 15px 0;
+      }
+      button {
+        cursor: pointer;
+        padding: 8px 12px;
+        margin-top: 10px;
+      }
+      input,
+      select,
+      textarea {
+        width: 100%;
+        padding: 8px;
+        margin-bottom: 10px;
+        box-sizing: border-box;
+      }
+      img {
+        max-width: 100px;
+        margin-top: 10px;
+        border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="box" style="background: #f9f9f9">
+        <h2>📝 Submit Ticket</h2>
+        <input type="text" id="tName" placeholder="Your Name" />
+        <select id="tApp">
+          <option value="Grading Portal">Grading Portal</option>
+          <option value="HR System">HR System</option>
+          <option value="WiFi">WiFi / Network</option>
+          <option value="Other">Other</option>
+        </select>
+        <textarea
+          id="tIssue"
+          rows="3"
+          placeholder="Describe the issue..."
+        ></textarea>
+
+        <label>Screenshot (Optional):</label>
+        <input type="file" id="tFile" accept="image/*" />
+
+        <button
+          onclick="submitTicket()"
+          style="background: #007bff; color: white"
+        >
+          Submit Ticket
+        </button>
+      </div>
+
+      <div class="box">
+        <h2>🛠️ Dev Dashboard</h2>
+        <div>
+          <button
+            onclick="loadTickets('OPEN')"
+            style="background: #28a745; color: white"
+          >
+            📥 Inbox
+          </button>
+          <button
+            onclick="loadTickets('RESOLVED')"
+            style="background: #6c757d; color: white"
+          >
+            🗄️ Archives
+          </button>
+        </div>
+        <div id="ticketList"></div>
+      </div>
+    </div>
+
+    <script>
+      // ---------------- CONFIGURATION ----------------
+      // 1. CHANGE THIS TO YOUR RENDER URL AFTER DEPLOYING.
+      //    For now, keep it localhost for testing.
+      let API_URL = "http://localhost:3000";
+
+      // 2. CLOUDINARY KEYS
+      const CLOUD_NAME = "dnrpwoy1y";
+      const UPLOAD_PRESET = "ojm6jzkr";
+      // -----------------------------------------------
+
+      async function submitTicket() {
+        const fileInput = document.getElementById("tFile");
+        let screenshotUrl = null;
+
+        // 1. Upload Image to Cloudinary (if file selected)
+        if (fileInput.files.length > 0) {
+          const formData = new FormData();
+          formData.append("file", fileInput.files[0]);
+          formData.append("upload_preset", UPLOAD_PRESET);
+
+          try {
+            document.querySelector("button").innerText = "Uploading...";
+            const res = await fetch(
+              `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,
+              {
+                method: "POST",
+                body: formData,
+              },
+            );
+            const data = await res.json();
+            screenshotUrl = data.secure_url;
+          } catch (err) {
+            alert("Image upload failed");
+            return;
+          }
+        }
+
+        // 2. Send Data to Backend
+        const payload = {
+          teacherName: document.getElementById("tName").value,
+          appName: document.getElementById("tApp").value,
+          issue: document.getElementById("tIssue").value,
+          screenshotUrl: screenshotUrl,
+        };
+
+        const res = await fetch(`${API_URL}/tickets`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        if (res.ok) {
+          alert("Ticket Submitted!");
+          document.querySelector("button").innerText = "Submit Ticket";
+          document.getElementById("tIssue").value = ""; // Clear form
+          loadTickets("OPEN"); // Refresh dashboard
+        }
+      }
+
+      async function loadTickets(status) {
+        const res = await fetch(`${API_URL}/tickets?status=${status}`);
+        const tickets = await res.json();
+
+        const list = document.getElementById("ticketList");
+        list.innerHTML =
+          tickets.length === 0
+            ? "<p>No tickets found.</p>"
+            : tickets
+                .map(
+                  (t) => `
+            <div class="ticket">
+                <strong>${t.app_name}</strong> - <small>${t.teacher_name}</small><br>
+                ${t.issue}<br>
+                ${t.screenshot_url ? `<a href="${t.screenshot_url}" target="_blank"><img src="${t.screenshot_url}"></a><br>` : ""}
+                ${status === "OPEN" ? `<button onclick="resolveTicket(${t.id})">✅ Mark Done</button>` : "<em>(Resolved)</em>"}
+            </div>
+        `,
+                )
+                .join("");
+      }
+
+      async function resolveTicket(id) {
+        await fetch(`${API_URL}/tickets/${id}/resolve`, { method: "PATCH" });
+        loadTickets("OPEN");
+      }
+
+      // Load Inbox on start
+      loadTickets("OPEN");
+    </script>
+  </body>
+</html>
